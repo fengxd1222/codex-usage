@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Quality verification for reporter parsing, error handling, and local data access boundaries."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Quality verification for panel/tab UI behavior and fallback output."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/local-codex-usage-data.md", "reason": "Verify implementation matches discovered Codex local usage fields and avoids double-counting/sensitive output."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/codex-plugin-usage-surfaces.md", "reason": "Verify plugin/app design stays within known Codex plugin capabilities and includes fallback where needed."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/openai-pricing-cost-model.md", "reason": "Verify cost estimates use the official pricing-derived formula, explicit model mappings, and correct estimate caveats."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/codex-interactive-ui-capabilities.md", "reason": "Verify the plugin does not claim unsupported native arrow-key/tab UI and uses supported CLI/plugin surfaces."}

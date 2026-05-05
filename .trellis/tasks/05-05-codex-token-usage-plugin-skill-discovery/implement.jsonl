@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Repo implementation conventions for scripts and validation checks."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Repo UI/plugin-surface conventions, even though this fix is manifest-focused."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/codex-plugin-usage-surfaces.md", "reason": "Prior research on Codex plugin, skill, marketplace, and installed cache conventions."}

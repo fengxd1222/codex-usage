@@ -1,0 +1,20 @@
+{
+  "name": "local-codex-usage",
+  "interface": {
+    "displayName": "Local Codex Utilities"
+  },
+  "plugins": [
+    {
+      "name": "codex-token-usage",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-token-usage"
+      },
+      "policy": {
+        "installation": "INSTALLED_BY_DEFAULT",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

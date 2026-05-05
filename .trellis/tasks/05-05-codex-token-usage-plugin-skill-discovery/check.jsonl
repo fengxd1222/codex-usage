@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Quality check context for script/test validation."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Quality check context for plugin-facing UI metadata."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/codex-plugin-usage-surfaces.md", "reason": "Verify the marketplace and skill discovery fix matches researched Codex plugin conventions."}

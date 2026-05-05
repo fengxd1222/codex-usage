@@ -1,0 +1,41 @@
+{
+  "name": "codex-token-usage",
+  "version": "0.1.0",
+  "description": "Local read-only Codex token usage reporting as a status-like CLI panel.",
+  "author": {
+    "name": "fengxd",
+    "email": "local@example.invalid",
+    "url": "https://local.invalid/codex-token-usage"
+  },
+  "homepage": "https://local.invalid/codex-token-usage",
+  "repository": "https://local.invalid/codex-token-usage",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "token-usage",
+    "local-reporting"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Token Usage",
+    "shortDescription": "Local Codex token usage summaries.",
+    "longDescription": "Prints a local read-only token usage panel in Codex CLI output, backed by state_5.sqlite thread rollout paths and whitelisted session JSONL usage metadata. HTML generation is explicit and optional.",
+    "developerName": "fengxd",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "websiteURL": "https://local.invalid/codex-token-usage",
+    "privacyPolicyURL": "https://local.invalid/privacy",
+    "termsOfServiceURL": "https://local.invalid/terms",
+    "defaultPrompt": [
+      "Use $codex-token-usage to print today's usage panel.",
+      "Use $codex-token-usage to show current-session usage.",
+      "Use $codex-token-usage to show 7-day usage."
+    ],
+    "brandColor": "#0F766E",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/icon.svg"
+  }
+}

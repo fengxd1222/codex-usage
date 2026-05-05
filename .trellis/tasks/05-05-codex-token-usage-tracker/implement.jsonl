@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend/parser conventions for the local read-only reporter and SQLite/JSONL usage extraction."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend/UI conventions for the Codex plugin panel and tabbed usage views."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/local-codex-usage-data.md", "reason": "Authoritative local data-source research: state SQLite index, session JSONL usage fields, dedupe risks, and privacy constraints."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/codex-plugin-usage-surfaces.md", "reason": "Plugin surface research: manifest/app/skill patterns, limitations of hooks/plugins for usage data, and panel fallback risks."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/openai-pricing-cost-model.md", "reason": "Official pricing/cost model research for API-equivalent cost estimates, model mapping, cache pricing, and caveats."}
+{"file": ".trellis/tasks/05-05-codex-token-usage-tracker/research/codex-interactive-ui-capabilities.md", "reason": "Official Codex UI capability research for CLI/app tab switching limitations and supported plugin invocation surfaces."}
