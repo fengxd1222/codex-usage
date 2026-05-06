@@ -12,38 +12,44 @@ Use this skill when the user invokes `$codex-token-usage`, asks for a Codex toke
 1. From the repository root, run the default CLI panel. This prints inside the Codex CLI conversation and defaults to `Today`:
 
    ```bash
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py
+   plugins/codex-token-usage/bin/codex-token-usage
    ```
 
-2. For explicit views, pass the logical tab name directly or use `summary --tab`:
+2. If the user asks to check setup or troubleshoot missing data, run diagnostics. This does not read secrets:
 
    ```bash
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py current-session
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py today
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py 7-days
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py month
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py all
+   plugins/codex-token-usage/bin/codex-token-usage doctor
    ```
 
-3. For `Today`, `7 Days`, `Month`, and `All`, group by project or directory when requested:
+3. For explicit views, pass the logical tab name directly or use `summary --tab`:
 
    ```bash
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py today --group project
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py 7-days --group directory
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py month --group project
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py all --group directory
+   plugins/codex-token-usage/bin/codex-token-usage current-session
+   plugins/codex-token-usage/bin/codex-token-usage today
+   plugins/codex-token-usage/bin/codex-token-usage 7-days
+   plugins/codex-token-usage/bin/codex-token-usage month
+   plugins/codex-token-usage/bin/codex-token-usage all
    ```
 
-4. If Codex provides a safe current-session identity, pass it through to the reporter. Do not infer it from raw transcript content:
+4. For `Today`, `7 Days`, `Month`, and `All`, group by project or directory when requested:
 
    ```bash
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py current-session --session-id "$CODEX_SESSION_ID"
+   plugins/codex-token-usage/bin/codex-token-usage today --group project
+   plugins/codex-token-usage/bin/codex-token-usage 7-days --group directory
+   plugins/codex-token-usage/bin/codex-token-usage month --group project
+   plugins/codex-token-usage/bin/codex-token-usage all --group directory
    ```
 
-5. Optional only: if the user explicitly asks for an HTML file, generate it without making it the default `$codex-token-usage` behavior:
+5. If Codex provides a safe current-session identity, pass it through to the reporter. Do not infer it from raw transcript content:
 
    ```bash
-   python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py html-panel
+   plugins/codex-token-usage/bin/codex-token-usage current-session --session-id "$CODEX_SESSION_ID"
+   ```
+
+6. Optional only: if the user explicitly asks for an HTML file, generate it without making it the default `$codex-token-usage` behavior:
+
+   ```bash
+   plugins/codex-token-usage/bin/codex-token-usage html-panel
    ```
 
 ## Safety Rules

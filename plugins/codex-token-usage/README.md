@@ -7,28 +7,36 @@ Local Codex plugin wrapper for token usage reporting inside Codex CLI output.
 Invoke the skill as `$codex-token-usage` or ask Codex to show the Codex token usage panel. The default bundled reporter command is:
 
 ```bash
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py
+plugins/codex-token-usage/bin/codex-token-usage
 ```
 
 The default invocation prints a status-like text panel in the Codex CLI conversation. It defaults to the `Today` view and includes logical tab labels for `Current Session`, `Today`, `7 Days`, `Month`, and `All`.
 
+The launcher is dependency-free and resolves `$PYTHON`, then `python3`, then `python`. It validates Python 3.10+ and `sqlite3` support before running the reporter.
+
+Run diagnostics without reading secrets:
+
+```bash
+plugins/codex-token-usage/bin/codex-token-usage doctor
+```
+
 Explicit views can be selected without a browser UI:
 
 ```bash
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py current-session
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py today
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py 7-days
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py month
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py all
+plugins/codex-token-usage/bin/codex-token-usage current-session
+plugins/codex-token-usage/bin/codex-token-usage today
+plugins/codex-token-usage/bin/codex-token-usage 7-days
+plugins/codex-token-usage/bin/codex-token-usage month
+plugins/codex-token-usage/bin/codex-token-usage all
 ```
 
 `Today`, `7 Days`, `Month`, and `All` support project/directory grouping:
 
 ```bash
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py today --group project
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py 7-days --group directory
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py month --group project
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py all --group directory
+plugins/codex-token-usage/bin/codex-token-usage today --group project
+plugins/codex-token-usage/bin/codex-token-usage 7-days --group directory
+plugins/codex-token-usage/bin/codex-token-usage month --group project
+plugins/codex-token-usage/bin/codex-token-usage all --group directory
 ```
 
 `Current Session` uses only a safe exact match from a provided Codex session id or rollout path, including supported environment variables when present. If the active session cannot be mapped safely, the reporter prints an unavailable message instead of guessing from history, transcript text, raw logs, prompts, or responses.
@@ -36,7 +44,7 @@ python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py all --group di
 HTML output is optional only:
 
 ```bash
-python3 plugins/codex-token-usage/scripts/codex_usage_reporter.py html-panel
+plugins/codex-token-usage/bin/codex-token-usage html-panel
 ```
 
 ## Data Sources

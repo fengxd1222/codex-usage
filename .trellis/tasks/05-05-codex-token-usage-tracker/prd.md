@@ -46,6 +46,8 @@ Explore a practical way to track Codex token usage, including input tokens, outp
 * The cost estimate should compute uncached input, cached input, and output costs separately. `reasoning_output_tokens` is a displayed output breakdown, not an extra charged bucket.
 * Unknown/unmapped model costs should be reported as unavailable with a warning instead of guessed from nearby model names.
 * Native arrow-key or in-place tab switching should only be claimed if a documented Codex plugin UI surface supports it; otherwise, tab switching means selecting logical tabs through `$codex-token-usage <tab>` / `$codex-token-usage <tab> --group project|directory`.
+* A follow-up compatibility pass should reduce the hard `python3` assumption by adding a launcher or packaged runtime path that handles machines with no `python3`, only `python`, or an unsupported Python runtime.
+* A follow-up presentation pass should make the status-like CLI output easier to scan while keeping raw exact token values available.
 
 ## Acceptance Criteria (evolving)
 
@@ -57,11 +59,11 @@ Explore a practical way to track Codex token usage, including input tokens, outp
 * [x] A Codex plugin manifest exists and exposes a usable workflow entry for token usage reporting.
 * [x] The default CLI panel view shows today's input, cached input, output, reasoning output, and total tokens.
 * [x] Logical tab switching exposes alternate summary dimensions through CLI output.
-* [ ] The CLI panel includes `Current Session`, `Today`, `7 Days`, `Month`, and `All` tab labels.
-* [ ] `Today`, `7 Days`, `Month`, and `All` support grouping by project/directory.
-* [ ] The CLI output includes API-equivalent estimated cost when pricing is known.
-* [ ] Unknown/unmapped models are surfaced as cost-unavailable warnings.
-* [ ] Documentation clearly states that native keyboard tab switching is not currently supported by documented local plugin APIs.
+* [x] The CLI panel includes `Current Session`, `Today`, `7 Days`, `Month`, and `All` tab labels.
+* [x] `Today`, `7 Days`, `Month`, and `All` support grouping by project/directory.
+* [x] The CLI output includes API-equivalent estimated cost when pricing is known.
+* [x] Unknown/unmapped models are surfaced as cost-unavailable warnings.
+* [x] Documentation clearly states that native keyboard tab switching is not currently supported by documented local plugin APIs.
 
 ## Definition of Done (team quality bar)
 
@@ -135,6 +137,7 @@ Explore a practical way to track Codex token usage, including input tokens, outp
 * Add model/day/project filters, cost estimates, trend charts, and budget alerts after the data layer is reliable.
 * Keep the parser isolated so future Codex format changes only touch one module.
 * Optionally add a live App Server listener later if `thread/tokenUsage/updated` proves stable enough.
+* Add a runtime compatibility layer before broader distribution: a POSIX/Windows launcher, Python version/dependency doctor, or self-contained binary if the plugin is shared beyond the user's own machines.
 
 ### Related scenarios
 
@@ -142,9 +145,34 @@ Explore a practical way to track Codex token usage, including input tokens, outp
 * Keep API billing reconciliation separate from local Codex session accounting.
 * Keep the default output text-first so it works inside Codex CLI without an external browser.
 * If Codex later documents plugin-authored interactive CLI views, add true keyboard tab switching as a separate enhancement.
+* Keep human output optimized for Codex CLI reading, while preserving `--json` for exact machine-readable values and future integrations.
 
 ### Failure and edge cases
 
 * Avoid double-counting repeated `total_token_usage` metadata across multiple JSONL events.
 * Tolerate missing `rollout_path`, incomplete trailing JSONL rows, active WAL writes, and absent local Codex data.
 * Never read `~/.codex/auth.json` and never print raw event bodies unless an explicit debug flag is added.
+* Handle missing `python3` gracefully; the skill/README currently invoke `python3` directly, so unsupported runtimes would fail before the reporter can print a useful diagnostic.
+
+## Follow-up Optimization Candidates
+
+### Runtime compatibility
+
+**Low-risk recommended path**: keep the Python reporter for now because it uses only the standard library, including built-in `sqlite3`, and add thin launchers plus a `doctor` command.
+
+* Add `bin/codex-token-usage` for POSIX shells and a Windows-friendly entry point if needed.
+* Launcher resolution order: `$PYTHON`, `python3`, `python`, then platform-specific launcher candidates such as `py -3`.
+* Check Python version and `sqlite3` availability before executing the main reporter, then print a short actionable error if unsupported.
+* Update README and skill instructions to invoke the launcher instead of calling `python3 .../codex_usage_reporter.py` directly.
+
+**Heavier distribution path**: publish self-contained binaries per OS/architecture if this becomes a widely shared plugin. This avoids Python installation issues but adds release/CI complexity and native packaging maintenance.
+
+**Not recommended immediately**: rewrite the reporter in Node.js only for portability. Node may be present on many Codex installations, but SQLite access usually introduces dependencies or native modules, while the current Python implementation remains dependency-free.
+
+### CLI output polish
+
+* Replace the raw key-value block with an aligned status panel: header, active view, sessions, exact totals, cache rate, average tokens/session, and estimated cost.
+* Show human cost as 2 decimal places by default, while keeping 6-decimal precision in `--json` or an explicit verbose mode.
+* Add responsive table formatting for grouped views: terminal-width detection, truncation for long project names, `--limit`, and predictable sorting by total tokens or cost.
+* Add `--format compact|wide|json` or `--style compact|detailed` so the default view stays readable but detailed cost/source/privacy notes remain available.
+* Move long source/privacy/cost explanations into a compact footer by default, with full text available via `--verbose` or README.

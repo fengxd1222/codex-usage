@@ -3,7 +3,9 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -20,6 +22,13 @@ SCRIPT_PATH = (
     / "codex-token-usage"
     / "scripts"
     / "codex_usage_reporter.py"
+)
+LAUNCHER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "plugins"
+    / "codex-token-usage"
+    / "bin"
+    / "codex-token-usage"
 )
 SPEC = importlib.util.spec_from_file_location("codex_usage_reporter", SCRIPT_PATH)
 if SPEC is None or SPEC.loader is None:
@@ -211,6 +220,86 @@ class CodexUsageReporterTest(unittest.TestCase):
         self.assertEqual(args.tab, "today")
         self.assertEqual(args.group, "project")
 
+    def test_doctor_reports_runtime_and_data_source_status_without_secret_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            session_path = home / "sessions" / "2026" / "05" / "05" / "rollout.jsonl"
+            write_session(session_path, [usage_event("2026-05-05T10:00:00Z", 1, 0, 2, 0, 3)])
+            write_state_db(home, [(session_path, "gpt-5", "/work/repo-one", 3)])
+            (home / "auth.json").write_text("secret-token", encoding="utf-8")
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                status = reporter.main(["doctor", "--codex-home", str(home), "--json"])
+
+            self.assertEqual(status, 0)
+            data = json.loads(output.getvalue())
+            self.assertTrue(data["ok"])
+            self.assertIn("python", {item["name"] for item in data["checks"]})
+            self.assertIn("sqlite3", {item["name"] for item in data["checks"]})
+            self.assertNotIn("secret-token", output.getvalue())
+
+    def test_doctor_surfaces_missing_codex_data_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output = io.StringIO()
+
+            with redirect_stdout(output):
+                status = reporter.main(["doctor", "--codex-home", tmp])
+
+            self.assertEqual(status, 1)
+            self.assertIn("Status: needs attention", output.getvalue())
+            self.assertIn("Missing Codex state database", output.getvalue())
+            self.assertIn("Missing Codex sessions directory", output.getvalue())
+            self.assertIn("does not read auth.json", output.getvalue())
+
+    def test_launcher_executes_reporter_with_python_runtime_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            session_path = home / "sessions" / "2026" / "05" / "05" / "rollout.jsonl"
+            write_session(session_path, [usage_event("2026-05-05T10:00:00Z", 1, 0, 2, 0, 3)])
+            write_state_db(home, [(session_path, "gpt-5", "/work/repo-one", 3)])
+
+            completed = subprocess.run(
+                [
+                    str(LAUNCHER_PATH),
+                    "doctor",
+                    "--codex-home",
+                    str(home),
+                ],
+                check=False,
+                capture_output=True,
+                env={**os.environ, "PYTHON": sys.executable},
+                text=True,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("Codex Token Usage Doctor", completed.stdout)
+            self.assertIn("sqlite3: ok", completed.stdout)
+
+    def test_launcher_falls_back_when_python_env_is_unusable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp)
+            session_path = home / "sessions" / "2026" / "05" / "05" / "rollout.jsonl"
+            write_session(session_path, [usage_event("2026-05-05T10:00:00Z", 1, 0, 2, 0, 3)])
+            write_state_db(home, [(session_path, "gpt-5", "/work/repo-one", 3)])
+
+            completed = subprocess.run(
+                [
+                    str(LAUNCHER_PATH),
+                    "doctor",
+                    "--codex-home",
+                    str(home),
+                ],
+                check=False,
+                capture_output=True,
+                env={**os.environ, "PYTHON": "/definitely/missing/python"},
+                text=True,
+            )
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("$PYTHON runtime not found", completed.stderr)
+            self.assertIn("Codex Token Usage Doctor", completed.stdout)
+
     def test_current_session_maps_only_by_explicit_safe_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp)
@@ -315,7 +404,7 @@ class CodexUsageReporterTest(unittest.TestCase):
             text = reporter.render_text_report(report, "today")
             data = reporter.report_to_json(report, "today")
 
-            self.assertIn("Estimated cost: $3.100000 USD", text)
+            self.assertIn("- Estimated cost: $3.10 USD", text)
             self.assertEqual(data["cost"]["estimate"]["total_cost"], "3.100000")
 
     def test_unknown_model_cost_is_unavailable_warning(self) -> None:
@@ -334,7 +423,7 @@ class CodexUsageReporterTest(unittest.TestCase):
             )
             text = reporter.render_text_report(report, "today")
 
-            self.assertIn("Estimated cost: unavailable", text)
+            self.assertIn("- Estimated cost: unavailable", text)
             self.assertIn("no explicit official pricing mapping", text)
 
 

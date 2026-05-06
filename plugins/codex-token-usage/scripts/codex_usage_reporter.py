@@ -3,17 +3,25 @@ from __future__ import annotations
 
 import argparse
 import html
+import importlib.util
 import json
 import os
-import sqlite3
 import sys
 import webbrowser
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
-from typing import Callable, Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Callable, Iterable, Iterator, Sequence
 from urllib.parse import quote
+
+if TYPE_CHECKING:
+    import sqlite3
+else:
+    try:
+        import sqlite3
+    except ImportError:
+        sqlite3 = None
 
 
 USAGE_FIELDS = (
@@ -71,7 +79,7 @@ CURRENT_SESSION_PATH_ENV_VARS = (
     "OPENAI_CODEX_TRANSCRIPT_PATH",
 )
 
-COMMAND_CHOICES = ("summary", "html-panel", "panel")
+COMMAND_CHOICES = ("summary", "doctor", "html-panel", "panel")
 OPTIONS_WITH_VALUES = (
     "--codex-home",
     "--group",
@@ -90,6 +98,7 @@ PRICING_NOTE = (
     "reasoning output tokens are display-only, not an extra charged bucket; "
     f"pricing snapshot {PRICING_SNAPSHOT_DATE}."
 )
+MIN_PYTHON_VERSION = (3, 10)
 
 
 @dataclass(frozen=True)
@@ -289,6 +298,32 @@ class UsageReport:
 
 
 @dataclass(frozen=True)
+class DoctorCheck:
+    name: str
+    ok: bool
+    detail: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {"name": self.name, "ok": self.ok, "detail": self.detail}
+
+
+@dataclass(frozen=True)
+class DoctorReport:
+    codex_home: Path
+    checks: tuple[DoctorCheck, ...]
+
+    def ok(self) -> bool:
+        return all(check.ok for check in self.checks)
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "ok": self.ok(),
+            "codex_home": str(self.codex_home),
+            "checks": [check.to_dict() for check in self.checks],
+        }
+
+
+@dataclass(frozen=True)
 class AggregateRow:
     label: str
     sessions: int
@@ -369,6 +404,8 @@ def sqlite_readonly_uri(path: Path) -> str:
 def load_thread_index(codex_home: Path) -> tuple[list[ThreadRecord], list[str]]:
     db_path = codex_home / "state_5.sqlite"
     warnings: list[str] = []
+    if sqlite3 is None:
+        return [], ["Python sqlite3 module is unavailable."]
     if not db_path.exists():
         return [], [f"Missing Codex state database: {db_path}"]
 
@@ -975,7 +1012,7 @@ def render_text_report(
         f"Generated: {report.generated_at.isoformat(timespec='seconds')}",
         render_tab_bar(tab),
         "",
-        TAB_LABELS[tab],
+        f"Active view: {TAB_LABELS[tab]}",
     ]
 
     if tab == "current-session":
@@ -1031,13 +1068,21 @@ def render_usage_block(
     usage: TokenUsage,
     cost: CostResult | None = None,
 ) -> list[str]:
+    plural = "session" if session_count == 1 else "sessions"
     lines = [
+        f"Status: {format_int(session_count)} {plural} in view",
         f"Sessions: {format_int(session_count)}",
-        f"Input tokens: {format_int(usage.input_tokens)}",
-        f"Cached input tokens: {format_int(usage.cached_input_tokens)}",
-        f"Output tokens: {format_int(usage.output_tokens)}",
-        f"Reasoning output tokens: {format_int(usage.reasoning_output_tokens)}",
-        f"Total tokens: {format_int(usage.total_tokens)}",
+        "",
+        "Exact totals:",
+        f"- Input tokens: {format_int(usage.input_tokens)}",
+        f"- Cached input tokens: {format_int(usage.cached_input_tokens)}",
+        f"- Output tokens: {format_int(usage.output_tokens)}",
+        f"- Reasoning output tokens: {format_int(usage.reasoning_output_tokens)}",
+        f"- Total tokens: {format_int(usage.total_tokens)}",
+        "",
+        "Derived:",
+        f"- Cache rate: {format_percent(cache_rate(usage))}",
+        f"- Average tokens/session: {format_average_tokens(usage.total_tokens, session_count)}",
     ]
     lines.extend(render_cost_block(cost))
     return lines
@@ -1045,14 +1090,14 @@ def render_usage_block(
 
 def render_cost_block(cost: CostResult | None) -> list[str]:
     if cost is None:
-        return ["Estimated cost: unavailable"]
+        return ["- Estimated cost: unavailable"]
     if cost.estimate is None:
-        return ["Estimated cost: unavailable"]
+        return ["- Estimated cost: unavailable"]
     estimate = cost.estimate
     return [
-        f"Estimated cost: {format_money(estimate.total_cost)} {estimate.currency}",
+        f"- Estimated cost: {format_money(estimate.total_cost)} {estimate.currency}",
         (
-            "Cost breakdown: "
+            "- Cost breakdown: "
             f"uncached input {format_money(estimate.uncached_input_cost)}, "
             f"cached input {format_money(estimate.cached_input_cost)}, "
             f"output {format_money(estimate.output_cost)}"
@@ -1109,7 +1154,27 @@ def format_money_decimal(value: Decimal) -> str:
 
 
 def format_money(value: Decimal) -> str:
-    return f"${format_money_decimal(value)}"
+    return f"${value.quantize(Decimal('0.01'))}"
+
+
+def format_percent(value: Decimal | None) -> str:
+    if value is None:
+        return "unavailable"
+    return f"{value.quantize(Decimal('0.01'))}%"
+
+
+def format_average_tokens(total_tokens: int, session_count: int) -> str:
+    if session_count <= 0:
+        return "unavailable"
+    average = Decimal(total_tokens) / Decimal(session_count)
+    return f"{average.quantize(Decimal('0.01'))}"
+
+
+def cache_rate(usage: TokenUsage) -> Decimal | None:
+    if usage.input_tokens <= 0:
+        return None
+    cached_tokens = min(usage.cached_input_tokens, usage.input_tokens)
+    return (Decimal(cached_tokens) * Decimal("100")) / Decimal(usage.input_tokens)
 
 
 def format_cost_cell(cost: CostResult) -> str:
@@ -1479,6 +1544,131 @@ def write_panel(
     return path
 
 
+def build_doctor_report(codex_home: Path | None = None) -> DoctorReport:
+    home = (codex_home or default_codex_home()).expanduser().resolve(strict=False)
+    checks = [
+        check_python_runtime(),
+        check_sqlite3_runtime(),
+        check_codex_home(home),
+        *check_codex_data_sources(home),
+    ]
+    return DoctorReport(codex_home=home, checks=tuple(checks))
+
+
+def check_python_runtime() -> DoctorCheck:
+    version = ".".join(str(part) for part in sys.version_info[:3])
+    required = ".".join(str(part) for part in MIN_PYTHON_VERSION)
+    ok = sys.version_info >= MIN_PYTHON_VERSION
+    detail = f"{sys.executable} reports Python {version}; required >= {required}."
+    return DoctorCheck("python", ok, detail)
+
+
+def check_sqlite3_runtime() -> DoctorCheck:
+    if importlib.util.find_spec("sqlite3") is None or sqlite3 is None:
+        return DoctorCheck(
+            "sqlite3",
+            False,
+            "Python sqlite3 module is unavailable; install Python with SQLite support.",
+        )
+    return DoctorCheck("sqlite3", True, f"sqlite3 module is available; SQLite {sqlite3.sqlite_version}.")
+
+
+def check_codex_home(codex_home: Path) -> DoctorCheck:
+    if not codex_home.exists():
+        return DoctorCheck("codex-home", False, f"Codex home does not exist: {codex_home}")
+    if not codex_home.is_dir():
+        return DoctorCheck("codex-home", False, f"Codex home is not a directory: {codex_home}")
+    return DoctorCheck("codex-home", True, f"Codex home is available: {codex_home}")
+
+
+def check_codex_data_sources(codex_home: Path) -> tuple[DoctorCheck, ...]:
+    return (
+        check_state_database(codex_home),
+        check_sessions_directory(codex_home),
+    )
+
+
+def check_state_database(codex_home: Path) -> DoctorCheck:
+    db_path = codex_home / "state_5.sqlite"
+    if sqlite3 is None:
+        return DoctorCheck("state-db", False, "Cannot inspect state_5.sqlite because sqlite3 is unavailable.")
+    if not db_path.exists():
+        return DoctorCheck("state-db", False, f"Missing Codex state database: {db_path}")
+    try:
+        connection = sqlite3.connect(sqlite_readonly_uri(db_path), uri=True)
+    except sqlite3.Error as exc:
+        return DoctorCheck("state-db", False, f"Could not open state_5.sqlite read-only: {exc}")
+    try:
+        with connection:
+            connection.row_factory = sqlite3.Row
+            table = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'threads'"
+            ).fetchone()
+            if table is None:
+                return DoctorCheck("state-db", False, "state_5.sqlite has no threads table.")
+            columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(threads)").fetchall()
+            }
+            if "rollout_path" not in columns:
+                return DoctorCheck("state-db", False, "threads table has no rollout_path column.")
+            total_threads = safe_int(
+                connection.execute("SELECT COUNT(*) FROM threads").fetchone()[0]
+            )
+            rollout_threads = safe_int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM threads WHERE rollout_path IS NOT NULL AND rollout_path != ''"
+                ).fetchone()[0]
+            )
+    except sqlite3.Error as exc:
+        return DoctorCheck("state-db", False, f"Could not inspect threads metadata: {exc}")
+    finally:
+        connection.close()
+    if rollout_threads == 0:
+        return DoctorCheck(
+            "state-db",
+            False,
+            f"threads table is readable but has no rollout_path entries ({total_threads} thread rows).",
+        )
+    return DoctorCheck(
+        "state-db",
+        True,
+        f"threads table is readable with {rollout_threads} rollout_path entries ({total_threads} thread rows).",
+    )
+
+
+def check_sessions_directory(codex_home: Path) -> DoctorCheck:
+    sessions_root = codex_home / "sessions"
+    if not sessions_root.exists():
+        return DoctorCheck("sessions-dir", False, f"Missing Codex sessions directory: {sessions_root}")
+    if not sessions_root.is_dir():
+        return DoctorCheck("sessions-dir", False, f"Codex sessions path is not a directory: {sessions_root}")
+    jsonl_count = sum(1 for path in sessions_root.rglob("*.jsonl") if path.is_file())
+    if jsonl_count == 0:
+        return DoctorCheck("sessions-dir", False, f"No session JSONL files found under: {sessions_root}")
+    return DoctorCheck("sessions-dir", True, f"Found {jsonl_count} session JSONL file(s) under: {sessions_root}")
+
+
+def render_doctor_report(report: DoctorReport) -> str:
+    lines = [
+        "Codex Token Usage Doctor",
+        f"Codex home: {report.codex_home}",
+        f"Status: {'ok' if report.ok() else 'needs attention'}",
+        "",
+    ]
+    for check in report.checks:
+        marker = "ok" if check.ok else "fail"
+        lines.append(f"- {check.name}: {marker} - {check.detail}")
+    lines.extend(
+        [
+            "",
+            "Safety: doctor inspects Python, sqlite3, state_5.sqlite schema/counts, and session file names only.",
+            "It does not read auth.json, history.jsonl, raw log bodies, prompts, responses, or transcript bodies.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def add_codex_home_arg(
     parser: argparse.ArgumentParser,
     *,
@@ -1517,6 +1707,10 @@ def build_parser() -> argparse.ArgumentParser:
     summary.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     add_codex_home_arg(summary, default=argparse.SUPPRESS)
     add_current_session_args(summary, default=argparse.SUPPRESS)
+
+    doctor = subparsers.add_parser("doctor", help="Check runtime and local Codex data-source availability.")
+    doctor.add_argument("--json", action="store_true", help="Emit machine-readable diagnostics.")
+    add_codex_home_arg(doctor, default=argparse.SUPPRESS)
 
     panel = subparsers.add_parser(
         "html-panel",
@@ -1594,6 +1788,15 @@ def current_session_context_from_args(args: argparse.Namespace) -> CurrentSessio
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(tuple(argv if argv is not None else sys.argv[1:]))
     codex_home = (args.codex_home or default_codex_home()).expanduser()
+
+    if args.command == "doctor":
+        doctor_report = build_doctor_report(codex_home)
+        if args.json:
+            print(json.dumps(doctor_report.to_dict(), indent=2, sort_keys=True))
+        else:
+            print(render_doctor_report(doctor_report))
+        return 0 if doctor_report.ok() else 1
+
     report = build_usage_report(codex_home=codex_home)
     current_session_context = current_session_context_from_args(args)
 
